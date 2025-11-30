@@ -35,18 +35,50 @@ int main(int argc, char* argv[]) {
     auto SAi = generate_random_data(16, seed + 7);  // SA initiator
     auto IDi = generate_random_data(16, seed + 8);  // ID initiator
 
+    std::vector<uint8_t> pre_data;
+    pre_data.insert(pre_data.end(), Ni.begin(), Ni.end());
+    pre_data.insert(pre_data.end(), Nr.begin(), Nr.end());
+
+    uint8_t hash[32] = {0};
+    size_t hash_size = 0;
+
+    new_calculate_hmac(
+        algo,
+        reinterpret_cast<const uint8_t *>(password.data()),
+        password.size(),
+        pre_data.data(),
+        pre_data.size(),
+        hash,
+        &hash_size
+    );
+
     std::vector<uint8_t> hash_data;
-    hash_data.insert(hash_data.end(), password.begin(), password.end());
-    hash_data.insert(hash_data.end(), Ni.begin(), Ni.end());
-    hash_data.insert(hash_data.end(), Nr.begin(), Nr.end());
-    hash_data.insert(hash_data.end(), g_x.begin(), g_x.end());
+    // hash_data.insert(hash_data.end(), password.begin(), password.end());
     hash_data.insert(hash_data.end(), g_y.begin(), g_y.end());
-    hash_data.insert(hash_data.end(), Ci.begin(), Ci.end());
+    hash_data.insert(hash_data.end(), g_x.begin(), g_x.end());
     hash_data.insert(hash_data.end(), Cr.begin(), Cr.end());
+    hash_data.insert(hash_data.end(), Ci.begin(), Ci.end());
     hash_data.insert(hash_data.end(), SAi.begin(), SAi.end());
     hash_data.insert(hash_data.end(), IDi.begin(), IDi.end());
 
-    auto HASH = calculate_hash(algo, hash_data);
+    // auto HASH = calculate_hmac(algo, password, hash_data);
+
+    uint8_t fin_hash[32] = {0};
+    size_t fin_hash_size = 0;
+
+    new_calculate_hmac(
+        algo,
+        hash,
+        hash_size,
+        hash_data.data(),
+        hash_data.size(),
+        fin_hash,
+        &fin_hash_size
+    );
+
+    std::vector<uint8_t> HASH;
+    HASH.reserve(fin_hash_size);
+    std::copy(&fin_hash[0], &fin_hash[hash_size], std::back_inserter(HASH));
 
     std::cout << bytes_to_hex(Ni) << "*"
               << bytes_to_hex(Nr) << "*"
@@ -57,6 +89,7 @@ int main(int argc, char* argv[]) {
               << bytes_to_hex(SAi) << "*"
               << bytes_to_hex(IDi) << "*"
               << bytes_to_hex(HASH) << std::endl;
+              // << bytes_to_hex(HASH) << std::endl;
 
     return 0;
 }

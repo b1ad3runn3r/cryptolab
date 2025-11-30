@@ -6,11 +6,21 @@
 #include <cstdint>
 
 enum class HashAlgorithm { 
-    MD5, SHA1, SHA256, SHA384, SHA512 
+    MD5, SHA1
 };
 
 std::vector<uint8_t> generate_random_data(size_t size, uint32_t seed);
 std::vector<uint8_t> calculate_hash(HashAlgorithm algo, const std::vector<uint8_t>& data);
+void new_calculate_hmac(
+    HashAlgorithm algo,
+    const uint8_t *key,
+    size_t key_size,
+    // const std::vector<uint8_t>& data,
+    const uint8_t *data,
+    size_t data_size,
+    uint8_t *out,
+    size_t *out_size
+);
 std::string bytes_to_hex(const std::vector<uint8_t>& data);
 std::vector<uint8_t> hex_to_bytes(const std::string& hex);
 HashAlgorithm get_algorithm_by_size(size_t hash_size);

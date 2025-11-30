@@ -25,7 +25,7 @@ public:
         }
     }
 
-    std::string get_password(uint64_t index) {
+    inline std::string get_password(uint64_t index) {
         std::string password(mask_.size(), ' ');
         uint64_t temp = index;
 
@@ -69,6 +69,7 @@ std::string found_password;
 
 void worker_thread(
     ThreadSafePasswordGenerator& generator,
+    const std::vector<uint8_t>& preshared_data,
     const std::vector<uint8_t>& fixed_data,
     const std::vector<uint8_t>& target_hash,
     HashAlgorithm algo,
@@ -80,18 +81,38 @@ void worker_thread(
         std::string password = generator.get_password(i);
         uint64_t current_attempts = ++attempts;
 
-        if (current_attempts % 100000 == 0) {
+        if (current_attempts % 1000000 == 0) {
             std::lock_guard<std::mutex> lock(cout_mutex);
             std::cout << "Thread " << thread_id << " - Attempt " << current_attempts
             << ": " << password << std::endl;
         }
 
-        std::vector<uint8_t> data;
-        data.insert(data.end(), password.begin(), password.end());
-        data.insert(data.end(), fixed_data.begin(), fixed_data.end());
+        uint8_t preshared_hash[32];
+        size_t preshared_size = 0;
+        uint8_t test_hash[32];
+        size_t test_size = 0;
 
-        auto test_hash = calculate_hash(algo, data);
-        if (test_hash == target_hash) {
+        new_calculate_hmac(
+            algo,
+            reinterpret_cast<const uint8_t *>(password.c_str()),
+            password.size(),
+            preshared_data.data(),
+            preshared_data.size(),
+            preshared_hash,
+            &preshared_size
+        );
+
+        new_calculate_hmac(
+            algo,
+            preshared_hash,
+            preshared_size,
+            fixed_data.data(),
+            fixed_data.size(),
+            test_hash,
+            &test_size
+        );
+
+        if (!std::memcmp(test_hash, target_hash.data(), test_size)) {
             password_found = true;
             found_password = password;
 
@@ -137,13 +158,16 @@ void worker_thread(
         auto IDi = hex_to_bytes(parts[7]);
         auto HASH = hex_to_bytes(parts[8]);
 
+
+        std::vector<uint8_t> preshared_data;
+        preshared_data.insert(preshared_data.end(), Ni.begin(), Ni.end());
+        preshared_data.insert(preshared_data.end(), Nr.begin(), Nr.end());
+
         std::vector<uint8_t> fixed_data;
-        fixed_data.insert(fixed_data.end(), Ni.begin(), Ni.end());
-        fixed_data.insert(fixed_data.end(), Nr.begin(), Nr.end());
-        fixed_data.insert(fixed_data.end(), g_x.begin(), g_x.end());
         fixed_data.insert(fixed_data.end(), g_y.begin(), g_y.end());
-        fixed_data.insert(fixed_data.end(), Ci.begin(), Ci.end());
+        fixed_data.insert(fixed_data.end(), g_x.begin(), g_x.end());
         fixed_data.insert(fixed_data.end(), Cr.begin(), Cr.end());
+        fixed_data.insert(fixed_data.end(), Ci.begin(), Ci.end());
         fixed_data.insert(fixed_data.end(), SAi.begin(), SAi.end());
         fixed_data.insert(fixed_data.end(), IDi.begin(), IDi.end());
 
@@ -168,6 +192,7 @@ void worker_thread(
 
             threads.emplace_back(worker_thread,
                                  std::ref(generator),
+                                 std::cref(preshared_data),
                                  std::cref(fixed_data),
                                  std::cref(HASH),
                                  algo,
